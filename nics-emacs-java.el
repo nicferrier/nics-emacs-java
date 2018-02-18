@@ -41,7 +41,18 @@
     (unless (assoc pom nj-list-of-poms)
       (setq nj-list-of-poms (cons (cons pom pom) nj-list-of-poms)))))
 
-(add-hook 'java-mode 'nj-java-file-init)
+(defun nj-maven-buffer-init ()
+  "Ensure we set the `compile-command` to maven."
+  (make-variable-buffer-local 'compile-command)
+  (let ((pom-dir (nj-pom-dir)))
+    (setq compile-command (format"cd %s ; mvn -q test" pom-dir))))
+
+(defun nj-init ()
+  "Initialize Nic's Java Emacs helpers - add to a mode hook."
+  (nj-java-file-init)
+  (nj-maven-buffer-init))
+
+(add-hook 'java-mode 'nj-init)
 
 
 ;;; Indexing a Java project
@@ -165,5 +176,27 @@ Pass the results as a list of lines to the lambda FINISHED-CONT."
 (define-key java-mode-map (kbd "C-c f") 'nj-open-file-in-project)
 (define-key java-mode-map (kbd "C-c 4 f") 'nj-open-file-in-project-other-window)
 (define-key java-mode-map (kbd "C-c #") 'nj-open-shell)
+
+(defun nics-java-init (groupid artifactid)
+  "Initialize a new Maven project.
+
+GROUPID and ARTIFACTID are passed to Maven."
+  (interactive
+   (list
+    (read-from-minibuffer "new project maven groupid: ")
+    (read-from-minibuffer "new project maven artifactid: ")))
+  (let* ((maven-buffer-name
+          (format "*nics-emacs-java-new-project-log-%s/%s*" groupid artifactid))
+         (maven-output (prog1
+                           (get-buffer-create maven-buffer-name)
+                         (with-current-buffer (get-buffer maven-buffer-name)
+                           (erase-buffer))))
+         (command (format
+                   "mvn -B archetype:generate -DarchetypeGroupId=org.apache.maven.archetypes -DgroupId=%s -DartifactId=%s"
+                   groupid artifactid)))
+    (switch-to-buffer-other-window maven-output)
+    (shell-command command maven-output)))
+
+(provide 'nj)
 
 ;;; nics-emacs-java.el ends here
