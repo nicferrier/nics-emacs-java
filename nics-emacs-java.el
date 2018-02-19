@@ -24,7 +24,11 @@
 
 ;;; requirements
 
-(defvar nj-list-of-poms nil)
+(defvar nj-list-of-poms nil
+  "An a-list of Java projects with their source files.
+
+CAR is the pom file-name and the CDR is the list of source files,
+or before indexing, the pom file-name again.")
 
 (defun nj-pom-dir ()
   (locate-dominating-file default-directory "pom.xml"))
@@ -52,7 +56,7 @@
   (nj-java-file-init)
   (nj-maven-buffer-init))
 
-(add-hook 'java-mode 'nj-init)
+(add-hook 'java-mode-hook 'nj-init)
 
 
 ;;; Indexing a Java project
@@ -65,23 +69,23 @@
                (when data
                  (setq all-data (concat all-data data))
                  (let ((lines (reverse (split-string all-data "\n"))))
-                   (seq results (append results (reverse (cdr lines))))
+                   (setq results (append results (reverse (cdr lines))))
                    (setq all-data (car lines)))))
      :sentinel (lambda (process event)
                  (if (and (stringp event)
                           (equal event "finished\n"))
                      (funcall finished-cont results))))))
 
-(defun nj--index (finished-cont)
-  "Do an index of the current project.
+(defun nj--index (directory finished-cont)
+  "Do an index of the project at DIRECTORY.
 
 Pass the results as a list of lines to the lambda FINISHED-CONT."
-  (let* ((dir (nj-pom-dir))
-         (default-directory dir)
-         (proc-name (format "*nics-emacs-java-index-%s*" dir))
+  (let* ((default-directory directory)
+         (proc-name (format "*nics-emacs-java-index-%s*" directory))
          (find-args (list "-name" "*.java" "!" "-name" ".#*"))
-         (proc (start-process proc-name proc-name find-program find-args))
-         (proc-funs (nj--make-index-procs dir finished-cont)))
+         (proc-args (list proc-name proc-name find-program))
+         (proc (apply 'start-process (append proc-args find-args)))
+         (proc-funs (nj--make-index-procs directory finished-cont)))
     (set-process-filter proc (plist-get proc-funs :filter))
     (set-process-sentinel proc (plist-get proc-funs :sentinel))))
 
@@ -90,25 +94,60 @@ Pass the results as a list of lines to the lambda FINISHED-CONT."
 
  (nj-file-name-directory \"/home/nicferrier/.profile\")
  => \"/home/nicferrier\"
-"
+
+Argument FILE-NAME the file name to directoryize."
   (let ((directory (file-name-directory file-name)))
     (if directory
-        (substring directory 0 (- length directory) 1)
+        (substring directory 0 (- (length directory) 1))
       file-name)))
 
 (defun nj-pom-project-name (pom-file-name)
-  (let ((dir (nj-pom-dir)))
+  "Get the project name indicated by POM-FILE-NAME."
+  (let ((dir (nj-file-name-directory pom-file-name)))
     (file-name-nondirectory dir)))
 
+
+;;; Indexer control
+
+(defun nj--idle-index-result-handler (pom-file-pair results)
+  "Worker function for `nj-idle-index-handle-pom`.
+Argument POM-FILE-PAIR the pair to alter.
+Argument RESULTS the results."
+  (let* ((directory (nj-file-name-directory
+                     (nj-file-name-directory
+                      (car pom-file-pair))))
+         (abs-func (lambda (f) (expand-file-name f directory)))
+         (file-list (mapcar abs-func results)))
+    (setcdr pom-file-pair file-list)))
+
 (defun nj-idle-index-handle-pom (pom-file-pair &optional completion)
+  "Called by `nj-idle-indexer` to handle each POM-FILE-PAIR.
+
+COMPLETION is an optional function to call when we're done."
   (let* ((pom-file-name (car pom-file-pair))
-         (project (nj-pom-project-name pom-file-name)))
+         (project (nj-pom-project-name pom-file-name))
+         (directory (nj-file-name-directory pom-file-name)))
     (message "nics-emacs-java indexing project %s" project)
     (nj--index
+     directory
      (lambda (results)
-       (setcdr pom-file-pair results)
+       (nj--idle-index-result-handler pom-file-pair results)
        (when (functionp completion)
          (funcall completion results))))))
+
+(defun nj-index-this (directory)
+  "Index the current (or specified) DIRECTORY.
+
+There must be a pom.xml in the current directory or an error will
+be raised."
+  (interactive (list default-directory))
+  (let ((pom-file (expand-file-name "pom.xml" directory)))
+    (if (file-exists-p pom-file)
+        (let ((pom-file-pair (cons pom-file pom-file)))
+          (setq nj-list-of-poms (cons pom-file-pair nj-list-of-poms))
+          (nj-idle-index-handle-pom pom-file-pair))
+      ;; else
+      (error "nic's emacs java: no pom project to index here."))))
 
 (defun nj-idle-indexer ()
   (mapcar 'nj-idle-index-handle-pom nj-list-of-poms))
@@ -119,7 +158,8 @@ Pass the results as a list of lines to the lambda FINISHED-CONT."
   (interactive)
   (setq nj-file-indexer (run-with-idle-timer 20 t 'nj-idle-indexer)))
 
-(nj-start-indexer)
+(unless nj-file-indexer
+  (nj-start-indexer))
 
 (defun nj-stop-indexer ()
   (interactive)
