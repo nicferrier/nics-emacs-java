@@ -135,19 +135,22 @@ COMPLETION is an optional function to call when we're done."
        (when (functionp completion)
          (funcall completion results))))))
 
-(defun nj-index-this (directory)
+(defun nj-index-this (directory &optional completion)
   "Index the current (or specified) DIRECTORY.
 
 There must be a pom.xml in the current directory or an error will
-be raised."
+be raised.
+
+COMPLETION can be supplied to call with the result when it's
+done."
   (interactive (list default-directory))
   (let ((pom-file (expand-file-name "pom.xml" directory)))
     (if (file-exists-p pom-file)
         (let ((pom-file-pair (cons pom-file pom-file)))
           (setq nj-list-of-poms (cons pom-file-pair nj-list-of-poms))
-          (nj-idle-index-handle-pom pom-file-pair))
+          (nj-idle-index-handle-pom pom-file-pair completion))
       ;; else
-      (error "nic's emacs java: no pom project to index here."))))
+      (error "Nic's Emacs java: no pom project to index here"))))
 
 (defun nj-idle-indexer ()
   (mapcar 'nj-idle-index-handle-pom nj-list-of-poms))
@@ -169,11 +172,16 @@ be raised."
 ;;; Extract things from the indexed project
 
 (defun nj-project-file-list (completion)
+  "Return the cached file-list or call `nj-idle-index-handle-pom`.
+
+COMPLETION is called with the result."
   (let* ((pom (nj-find-pom))
          (pom-entry (cdr (assoc pom nj-list-of-poms))))
-    (if (listp pom-entry)
+    (if (and pom-entry (listp pom-entry))
         (funcall completion pom-entry)
-      (nj-idle-index-handle-pom pom completion))))
+      (let ((pom-entry (cons pom pom)))
+        (setq nj-list-of-poms (cons pom-entry nj-list-of-poms))
+        (nj-idle-index-handle-pom pom-entry completion)))))
 
 (defun nj-complete (completion)
   (nj-project-file-list
@@ -236,6 +244,28 @@ GROUPID and ARTIFACTID are passed to Maven."
                    groupid artifactid)))
     (switch-to-buffer-other-window maven-output)
     (shell-command command maven-output)))
+
+(defun nj--list-project (completion)
+  (nj-project-file-list
+   (lambda (file-list)
+     (funcall completion file-list))))
+
+(defun nj-list-project (directory)
+  (interactive
+   (list (read-file-name "Project: " "~/javawork")))
+  (let* ((project-dir-name (substring directory 0 (- (length directory) 1)))
+         (buffer-name (format "*java-%s*" (file-name-base project-dir-name)))
+         (pom-file (expand-file-name "pom.xml" directory))
+         (default-directory directory)
+         (file-list (nj-await 'nj--list-project))
+         (buffer (get-buffer-create buffer-name)))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (goto-char (point-min))
+      (mapcar (lambda (file-name)
+                (insert file-name)
+                (newline)) file-list))
+    (switch-to-buffer buffer)))
 
 (provide 'nj)
 
