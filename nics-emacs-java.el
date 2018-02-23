@@ -82,9 +82,9 @@ or before indexing, the pom file-name again.")
 Pass the results as a list of lines to the lambda FINISHED-CONT."
   (let* ((default-directory directory)
          (proc-name (format "*nics-emacs-java-index-%s*" directory))
-         (find-args (list "-name" "*.java" "!" "-name" ".#*"))
+         (find-args (list directory "-name" "*.java" "!" "-name" ".#*"))
          (proc-args (list proc-name proc-name find-program))
-         (proc (apply 'start-process (append proc-args find-args)))
+         (proc (apply 'start-file-process (append proc-args find-args)))
          (proc-funs (nj--make-index-procs directory finished-cont)))
     (set-process-filter proc (plist-get proc-funs :filter))
     (set-process-sentinel proc (plist-get proc-funs :sentinel))))
@@ -245,6 +245,22 @@ GROUPID and ARTIFACTID are passed to Maven."
     (switch-to-buffer-other-window maven-output)
     (shell-command command maven-output)))
 
+(defconst nj-list-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") 'nj-list-open)
+    map)
+  "Keymap for nj-list major mode.")
+
+(defun nj-list-mode ()
+  "Major mode for the file list."
+  (interactive)
+  (kill-all-local-variables)
+  (use-local-map nj-list-mode-map)
+  (setq major-mode 'nj-list-mode)
+  (setq mode-name "nj-list-mode")
+  (setq buffer-read-only 't)
+  (run-hooks 'nj-list-mode))
+
 (defun nj--list-project (completion)
   (nj-project-file-list
    (lambda (file-list)
@@ -260,12 +276,22 @@ GROUPID and ARTIFACTID are passed to Maven."
          (file-list (nj-await 'nj--list-project))
          (buffer (get-buffer-create buffer-name)))
     (with-current-buffer buffer
-      (erase-buffer)
-      (goto-char (point-min))
-      (mapcar (lambda (file-name)
-                (insert file-name)
-                (newline)) file-list))
+      (let ((buffer-read-only nil))
+        (erase-buffer)
+        (goto-char (point-min))
+        (mapcar (lambda (file-name)
+                  (insert file-name)
+                  (newline))
+                file-list))
+      (nj-list-mode))
     (switch-to-buffer buffer)))
+
+(defun nj-list-open (file)
+  (interactive
+   (list
+    (buffer-substring (line-beginning-position) (line-end-position))))
+  (unless (equal "" file)
+    (find-file file)))
 
 (provide 'nj)
 
