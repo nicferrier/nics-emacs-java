@@ -1,5 +1,6 @@
 ;;; enterprise Java help -*- lexical-binding: t -*-
 
+(require 'hl-line)
 (require 'cc-mode)
 
 (defun nj-dissam (buffer)
@@ -224,6 +225,7 @@ COMPLETION is called with the result."
 (define-key java-mode-map (kbd "C-c f") 'nj-open-file-in-project)
 (define-key java-mode-map (kbd "C-c 4 f") 'nj-open-file-in-project-other-window)
 (define-key java-mode-map (kbd "C-c #") 'nj-open-shell)
+(define-key java-mode-map (kbd "C-c .") 'nj-open-project)
 
 (defun nics-java-init (groupid artifactid)
   "Initialize a new Maven project.
@@ -259,6 +261,7 @@ GROUPID and ARTIFACTID are passed to Maven."
   (setq major-mode 'nj-list-mode)
   (setq mode-name "nj-list-mode")
   (setq buffer-read-only 't)
+  (hl-line-mode)
   (run-hooks 'nj-list-mode))
 
 (defun nj--list-project (completion)
@@ -285,6 +288,10 @@ GROUPID and ARTIFACTID are passed to Maven."
                 file-list))
       (nj-list-mode))
     (switch-to-buffer buffer)))
+
+(defun nj-open-project (dir)
+  (interactive (list (nj-pom-dir)))
+  (nj-list-project dir))
 
 (defun nj-list-open (file)
   (interactive
