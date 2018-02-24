@@ -250,11 +250,14 @@ GROUPID and ARTIFACTID are passed to Maven."
 (defconst nj-list-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") 'nj-list-open)
+    (define-key map (kbd "q") 'nj-list-quit)
     map)
   "Keymap for nj-list major mode.")
 
 (defun nj-list-mode ()
-  "Major mode for the file list."
+  "Major mode for the file list.
+
+\\{nj-list-mode-map}"
   (interactive)
   (kill-all-local-variables)
   (use-local-map nj-list-mode-map)
@@ -270,8 +273,17 @@ GROUPID and ARTIFACTID are passed to Maven."
      (funcall completion file-list))))
 
 (defun nj-list-project (directory)
+  "List the project in DIRECTORY.
+
+Use the `nj-list-of-poms` to get the list of Java files (or
+regenerate it) and display them in a buffer list."
   (interactive
-   (list (read-file-name "Project: " "~/javawork")))
+   (list
+    (if (and (not current-prefix-arg)
+             (file-exists-p (expand-file-name "pom.xml" default-directory)))
+        default-directory
+      ;; Else read a project
+      (read-file-name "Project: " "~/javawork"))))
   (let* ((project-dir-name (substring directory 0 (- (length directory) 1)))
          (buffer-name (format "*java-%s*" (file-name-base project-dir-name)))
          (pom-file (expand-file-name "pom.xml" directory))
@@ -290,15 +302,25 @@ GROUPID and ARTIFACTID are passed to Maven."
     (switch-to-buffer buffer)))
 
 (defun nj-open-project (dir)
+  "Open the project in DIR.
+
+See `nj-list-mode`, the mode the buffer is opened in."
   (interactive (list (nj-pom-dir)))
   (nj-list-project dir))
 
 (defun nj-list-open (file)
+  "Open FILE from the list of Java's."
   (interactive
    (list
     (buffer-substring (line-beginning-position) (line-end-position))))
   (unless (equal "" file)
     (find-file file)))
+
+(defun nj-list-quit ()
+  "Quit the Java file list."
+  (interactive)
+  (when (equal major-mode 'nj-list-mode)
+    (kill-buffer (current-buffer))))
 
 (provide 'nj)
 
