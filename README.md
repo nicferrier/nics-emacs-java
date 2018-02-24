@@ -33,6 +33,7 @@ C-c f           nj-open-file-in-project
 key             binding
 ---             -------
 RET             nj-list-open
+q               nj-list-quit
 ```
 
 `nj-list-open` opens a Java file from the list.
