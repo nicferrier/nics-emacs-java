@@ -15,6 +15,8 @@ started.
 ## When in a Java file
 
 ```
+key             binding
+---             -------
 C-c #           nj-open-shell
 C-c .           nj-open-project
 C-c 4           Prefix Command
@@ -25,6 +27,21 @@ C-c f           nj-open-file-in-project
 
 `nj-open-shell` opens a shell in the top level of your project.
 
+## When in the project view
+
+```
+key             binding
+---             -------
+RET             nj-list-open
+```
+
+`nj-list-open` opens a Java file from the list.
+
 ### What's a project?
 
 Something with a pom.xml file.
+
+### How are Java files found?
+
+Emacs uses it's `find-program`. This may not be available, on Windows
+for example.
