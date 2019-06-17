@@ -2,6 +2,7 @@
 
 (require 'hl-line)
 (require 'cc-mode)
+(require 'ansi-color)
 
 (defun nj-dissam (buffer)
   (interactive
@@ -21,6 +22,34 @@
           (not-modified)
           (setq buffer-read-only 't)
           (beginning-of-buffer))))))
+
+;;; import finding
+
+(defun nj-import-list ()
+  "Find the list of imports in a java program.
+
+This function proceeds by finding the first import statement from
+the start of the file and then scanning every line going forward
+for an import statement until it hits a line which is not either
+blank or empty or a comment.
+
+A list of the class names imported is returned."
+  (save-excursion
+    (goto-char (point-min))
+    (goto-char (+ 1 (line-end-position)) )
+    (let (imports)
+      (re-search-forward "^import \\(.*\\);$" nil t)
+      (while (progn
+               (when (save-match-data
+                       (string-match "^import .*" (match-string 0)))
+                 (setq imports (cons (match-string-no-properties 1) imports)))
+               (goto-char (+ 1 (line-end-position)))
+               (or (looking-at "^//.*")
+                   (looking-at "^[:space:]+$")
+                   (looking-at "^$")
+                   (looking-at "^import \\(.*\\);$"))))
+      imports)))
+
 
 
 ;;; requirements
@@ -50,6 +79,12 @@ or before indexing, the pom file-name again.")
   "Ensure we set the `compile-command` to maven."
   (make-variable-buffer-local 'compile-command)
   (let ((pom-dir (nj-pom-dir)))
+
+    ;; to handle term output ones needs to:
+    ;;
+    ;;   (ansi-color-apply-on-region (point-min) (point-max))
+    ;;
+    ;; on the compiled region
     (setq compile-command (format"cd %s ; mvn -q test" pom-dir))))
 
 (defun nj-init ()
@@ -89,6 +124,8 @@ Pass the results as a list of lines to the lambda FINISHED-CONT."
          (proc-funs (nj--make-index-procs directory finished-cont)))
     (set-process-filter proc (plist-get proc-funs :filter))
     (set-process-sentinel proc (plist-get proc-funs :sentinel))))
+
+
 
 (defun nj-file-name-directory (file-name)
   "Like `file-name-directory` but capable of recursion.
